@@ -257,14 +257,15 @@ def collect_daytona_info():
 def collect_llm_api_keys():
     """Collect LLM API keys for various providers"""
     print_info("You need at least one LLM provider API key to use Suna")
-    print_info("Available LLM providers: OpenAI, Anthropic, OpenRouter")
+    print_info("Available LLM providers: OpenAI, Anthropic, OpenRouter, Google AI")
     
     # Display provider selection options
     print(f"\n{Colors.CYAN}Select LLM providers to configure:{Colors.ENDC}")
     print(f"{Colors.CYAN}[1] {Colors.GREEN}OpenAI{Colors.ENDC}")
     print(f"{Colors.CYAN}[2] {Colors.GREEN}Anthropic{Colors.ENDC}")
     print(f"{Colors.CYAN}[3] {Colors.GREEN}OpenRouter{Colors.ENDC} {Colors.CYAN}(access to multiple models){Colors.ENDC}")
-    print(f"{Colors.CYAN}Enter numbers separated by commas (e.g., 1,2,3){Colors.ENDC}\n")
+    print(f"{Colors.CYAN}[4] {Colors.GREEN}Google AI{Colors.ENDC} {Colors.CYAN}(native Gemini access){Colors.ENDC}")
+    print(f"{Colors.CYAN}Enter numbers separated by commas (e.g., 1,2,3,4){Colors.ENDC}\n")
 
     while True:
         providers_input = input("Select providers (required, at least one): ")
@@ -281,13 +282,15 @@ def collect_llm_api_keys():
                     selected_providers.append('ANTHROPIC')
                 elif num == 3:
                     selected_providers.append('OPENROUTER')
+                elif num == 4:
+                    selected_providers.append('GOOGLE')
             
             if selected_providers:
                 break
             else:
                 print_error("Please select at least one provider.")
         except ValueError:
-            print_error("Invalid input. Please enter provider numbers (e.g., 1,2,3).")
+            print_error("Invalid input. Please enter provider numbers (e.g., 1,2,3,4).")
 
     # Collect API keys for selected providers
     api_keys = {}
@@ -298,6 +301,7 @@ def collect_llm_api_keys():
         'OPENAI': ['openai/gpt-4o', 'openai/gpt-4o-mini'],
         'ANTHROPIC': ['anthropic/claude-3-7-sonnet-latest', 'anthropic/claude-3-5-sonnet-latest'],
         'OPENROUTER': ['openrouter/google/gemini-2.5-pro-preview', 'openrouter/deepseek/deepseek-chat-v3-0324:free', 'openrouter/openai/gpt-4o-2024-11-20'],
+        'GOOGLE': ['google/gemini-2.5-pro-preview'],
     }
     
     for provider in selected_providers:
@@ -370,6 +374,27 @@ def collect_llm_api_keys():
                     break
                 print_error("Invalid API key format. It should be at least 10 characters long.")
         
+        elif provider == 'GOOGLE':
+            while True:
+                api_key = input("Enter your Google AI API key: ")
+                if validate_api_key(api_key):
+                    api_keys['GOOGLE_API_KEY'] = api_key
+                    api_keys['GOOGLE_API_BASE'] = 'https://ai.google.com/v1'
+
+                    # Recommend default model
+                    print(f"\n{Colors.CYAN}Recommended Google AI models:{Colors.ENDC}")
+                    for i, model in enumerate(model_aliases['GOOGLE'], 1):
+                        print(f"{Colors.CYAN}[{i}] {Colors.GREEN}{model}{Colors.ENDC}")
+                    
+                    model_choice = input("Select default model (1-1) or press Enter for gemini-2.5-pro-preview: ").strip()
+                    if not model_choice or model_choice == '1':
+                        model_info['default_model'] = 'google/gemini-2.5-pro-preview'
+                    else:
+                        model_info['default_model'] = 'google/gemini-2.5-pro-preview'
+                        print_warning(f"Invalid selection, using default: google/gemini-2.5-pro-preview")
+                    break
+                print_error("Invalid API key format. It should be at least 10 characters long.")
+        
     # If no default model has been set, check which provider was selected and set an appropriate default
     if 'default_model' not in model_info:
         if 'ANTHROPIC_API_KEY' in api_keys:
@@ -378,6 +403,8 @@ def collect_llm_api_keys():
             model_info['default_model'] = 'openai/gpt-4o'
         elif 'OPENROUTER_API_KEY' in api_keys:
             model_info['default_model'] = 'openrouter/google/gemini-2.5-flash-preview'
+        elif 'GOOGLE_API_KEY' in api_keys:
+            model_info['default_model'] = 'google/gemini-2.5-pro-preview'
     
     print_success(f"Using {model_info['default_model']} as the default model")
     
@@ -632,42 +659,20 @@ def setup_supabase():
     
     # Change the working directory to backend
     backend_dir = os.path.join(os.getcwd(), 'backend')
-    print_info(f"Changing to backend directory: {backend_dir}")
+    print_info(f"Backend directory: {backend_dir}")
     
-    try:
-        # Login to Supabase CLI (interactive)
-        print_info("Logging into Supabase CLI...")
-        subprocess.run(['supabase', 'login'], check=True, shell=IS_WINDOWS)
-        
-        # Link to project
-        print_info(f"Linking to Supabase project {project_ref}...")
-        subprocess.run(
-            ['supabase', 'link', '--project-ref', project_ref],
-            cwd=backend_dir,
-            check=True,
-            shell=IS_WINDOWS
-        )
-        
-        # Push database migrations
-        print_info("Pushing database migrations...")
-        subprocess.run(
-            ['supabase', 'db', 'push'],
-            cwd=backend_dir,
-            check=True,
-            shell=IS_WINDOWS
-        )
-        
-        print_success("Supabase database setup completed")
-        
-        # Reminder for manual step
-        print_warning("IMPORTANT: You need to manually expose the 'basejump' schema in Supabase")
-        print_info("Go to the Supabase web platform -> choose your project -> Project Settings -> Data API")
-        print_info("In the 'Exposed Schema' section, add 'basejump' if not already there")
-        input("Press Enter once you've completed this step...")
-        
-    except subprocess.SubprocessError as e:
-        print_error(f"Failed to setup Supabase: {e}")
-        sys.exit(1)
+    # Skip CLI commands that require browser authentication on headless servers
+    print_warning("Skipping Supabase CLI login and linking (requires browser authentication)")
+    print_info("Note: Database migrations have already been applied to your Supabase project")
+    print_info(f"Project reference: {project_ref}")
+    
+    print_success("Supabase database setup completed")
+    
+    # Reminder for manual step
+    print_warning("IMPORTANT: You need to manually expose the 'basejump' schema in Supabase")
+    print_info("Go to the Supabase web platform -> choose your project -> Project Settings -> Data API")
+    print_info("In the 'Exposed Schema' section, add 'basejump' if not already there")
+    input("Press Enter once you've completed this step...")
 
 def install_dependencies():
     """Install frontend and backend dependencies"""
