@@ -200,3 +200,5 @@ rabbitmq_data
 .setup_env.json
 
 backend/.test_token_compression.py
+/node-functions/node_modules
+/node_modules
