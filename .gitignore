@@ -203,3 +203,4 @@ backend/.test_token_compression.py
 /node-functions/node_modules
 /node_modules
 backend/.env.server
+node-functions/.env.yaml

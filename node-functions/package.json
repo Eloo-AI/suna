@@ -1,0 +1,35 @@
+{
+  "name": "suna-cloud-functions",
+  "version": "1.0.0",
+  "description": "Cloud Functions for Suna Agent API with multi-project Firebase authentication",
+  "main": "index.js",
+  "scripts": {
+    "start": "functions-framework --target=health",
+    "deploy": "./deploy.sh",
+    "logs": "gcloud functions logs read --limit=50",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.3.0",
+    "@google-cloud/secret-manager": "^5.0.0",
+    "firebase-admin": "^12.0.0",
+    "axios": "^1.6.0",
+    "form-data": "^4.0.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  },
+  "keywords": [
+    "cloud-functions",
+    "firebase",
+    "suna",
+    "api",
+    "multi-project-auth"
+  ],
+  "author": "Eloo.ai",
+  "license": "MIT"
+} 
