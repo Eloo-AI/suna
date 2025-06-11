@@ -125,6 +125,23 @@ def create_sandbox(password: str, project_id: str = None):
     logger.debug(f"Sandbox environment successfully initialized")
     return sandbox
 
+async def stop_sandbox(sandbox_id: str):
+    """Stop a sandbox by its ID without deleting it."""
+    logger.info(f"Stopping sandbox with ID: {sandbox_id}")
+    
+    try:
+        # Get the sandbox
+        sandbox = daytona.get_current_sandbox(sandbox_id)
+        
+        # Stop the sandbox (don't delete it)
+        daytona.stop(sandbox)
+        
+        logger.info(f"Successfully stopped sandbox {sandbox_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Error stopping sandbox {sandbox_id}: {str(e)}")
+        raise e
+
 async def delete_sandbox(sandbox_id: str):
     """Delete a sandbox by its ID."""
     logger.info(f"Deleting sandbox with ID: {sandbox_id}")

@@ -6,7 +6,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter, Form, D
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from sandbox.sandbox import get_or_start_sandbox, delete_sandbox
+from sandbox.sandbox import get_or_start_sandbox, delete_sandbox, stop_sandbox
 from utils.logger import logger
 from utils.auth_utils import get_optional_user_id
 from services.supabase import DBConnection
@@ -325,6 +325,28 @@ async def delete_sandbox_route(
         return {"status": "success", "deleted": True, "sandbox_id": sandbox_id}
     except Exception as e:
         logger.error(f"Error deleting sandbox {sandbox_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/sandboxes/{sandbox_id}/stop")
+async def stop_sandbox_route(
+    sandbox_id: str,
+    request: Request = None,
+    user_id: Optional[str] = Depends(get_optional_user_id)
+):
+    """Stop a sandbox without deleting it"""
+    logger.info(f"Received sandbox stop request for sandbox {sandbox_id}, user_id: {user_id}")
+    client = await db.client
+    
+    # Verify the user has access to this sandbox
+    await verify_sandbox_access(client, sandbox_id, user_id)
+    
+    try:
+        # Stop the sandbox using the sandbox module function
+        await stop_sandbox(sandbox_id)
+        
+        return {"status": "success", "stopped": True, "sandbox_id": sandbox_id}
+    except Exception as e:
+        logger.error(f"Error stopping sandbox {sandbox_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Should happen on server-side fully

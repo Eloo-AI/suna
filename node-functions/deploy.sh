@@ -67,6 +67,19 @@ gcloud functions deploy suna-stop-sandbox \
   --timeout $TIMEOUT \
   --region $REGION
 
+# Deploy stop agent function
+echo "🛑 Deploying stop agent function..."
+gcloud functions deploy suna-stop-agent \
+  --runtime $RUNTIME \
+  --trigger-http \
+  --allow-unauthenticated \
+  --env-vars-file .env.yaml \
+  --source . \
+  --entry-point stopAgent \
+  --memory $MEMORY \
+  --timeout $TIMEOUT \
+  --region $REGION
+
 echo ""
 echo "✅ All functions deployed successfully!"
 echo ""
@@ -74,7 +87,8 @@ echo "📄 Function URLs:"
 echo "   Health: https://$REGION-$PROJECT_ID.cloudfunctions.net/suna-health"
 echo "   Initiate: https://$REGION-$PROJECT_ID.cloudfunctions.net/suna-initiate"
 echo "   Poll: https://$REGION-$PROJECT_ID.cloudfunctions.net/suna-poll"
-echo "   Stop: https://$REGION-$PROJECT_ID.cloudfunctions.net/suna-stop-sandbox"
+echo "   Stop Agent: https://$REGION-$PROJECT_ID.cloudfunctions.net/suna-stop-agent"
+echo "   Stop & Delete: https://$REGION-$PROJECT_ID.cloudfunctions.net/suna-stop-sandbox"
 echo ""
 echo "🔧 To view logs: gcloud functions logs read <function-name> --limit=50"
 echo "🔧 To update environment: Edit .env.yaml and redeploy"

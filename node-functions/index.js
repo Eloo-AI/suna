@@ -469,6 +469,68 @@ class SunaClient {
     }
   }
 
+  async stopAgent(agentRunId) {
+    if (!this.accessToken) {
+      throw new Error('Not authenticated with Supabase');
+    }
+
+    try {
+      // Get agent run details to find sandbox_id
+      const runStatus = await this.getAgentRunStatus(agentRunId);
+      const threadId = runStatus.threadId || runStatus.thread_id;
+
+      if (!threadId) {
+        throw new Error('Could not derive thread_id from agent run');
+      }
+
+      // Get project and sandbox IDs
+      const threadResponse = await axios.get(`${config.supabase_url}/rest/v1/threads?thread_id=eq.${threadId}`, {
+        headers: {
+          'apikey': config.supabase_anon_key,
+          'Authorization': `Bearer ${this.accessToken}`
+        }
+      });
+
+      const thread = threadResponse.data[0];
+      const projectId = thread.project_id;
+
+      const projectResponse = await axios.get(`${config.supabase_url}/rest/v1/projects?project_id=eq.${projectId}`, {
+        headers: {
+          'apikey': config.supabase_anon_key,
+          'Authorization': `Bearer ${this.accessToken}`
+        }
+      });
+
+      const project = projectResponse.data[0];
+      const sandboxId = project.sandbox.sandbox_id || project.sandbox.id;
+
+      // Stop agent
+      const stopResult = await axios.post(`${config.backend_url}/api/agent-run/${agentRunId}/stop`, {}, {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`
+        }
+      });
+
+      // Stop sandbox (don't delete it)
+      const stopSandboxResult = await axios.post(`${config.backend_url}/api/sandboxes/${sandboxId}/stop`, {}, {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`
+        }
+      });
+
+      return {
+        success: true,
+        agent_run_id: agentRunId,
+        sandbox_id: sandboxId,
+        message: 'Agent stopped and sandbox stopped successfully'
+      };
+
+    } catch (error) {
+      console.error('Stop agent failed:', error.message);
+      throw new Error(`Stop agent failed: ${error.message}`);
+    }
+  }
+
   setCurrentUser(user) {
     this.currentUser = user;
   }
@@ -591,6 +653,35 @@ functions.http('stopAndDeleteSandbox', async (req, res) => {
       });
     } catch (error) {
       console.error('Error in stopAndDeleteSandbox:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+});
+
+/**
+ * Stop Agent Cloud Function
+ */
+functions.http('stopAgent', async (req, res) => {
+  corsMiddleware(req, res, async () => {
+    try {
+      await authenticateRequest(req, res, async () => {
+        const { agent_run_id } = req.body;
+        
+        if (!agent_run_id) {
+          return res.status(400).json({ error: 'Agent run ID is required' });
+        }
+
+        // Use service account for Supabase operations
+        const auth = await getServiceAccountAuth();
+        const client = auth.client;
+        client.setCurrentUser(req.user);
+        
+        const result = await client.stopAgent(agent_run_id);
+        
+        res.json(result);
+      });
+    } catch (error) {
+      console.error('Error in stopAgent:', error);
       res.status(500).json({ error: error.message });
     }
   });

@@ -177,7 +177,42 @@ curl -X POST "https://us-central1-suna-deployment-1749244914.cloudfunctions.net/
 
 ---
 
-### 4. Stop Agent & Delete Sandbox
+### 4. Stop Agent (Keep Sandbox)
+
+**POST** `/suna-stop-agent`
+
+Stop a running agent while keeping the sandbox environment.
+
+**Authentication**: Required
+
+**Request Body**:
+```json
+{
+  "agent_run_id": "314e777c-58e1-4f24-b2d4-188f95efc026"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "agent_run_id": "314e777c-58e1-4f24-b2d4-188f95efc026",
+  "sandbox_id": "f91c81c6-2286-4e55-b587-3a8bef1892ab",
+  "message": "Agent stopped and sandbox stopped successfully"
+}
+```
+
+**cURL Example**:
+```bash
+curl -X POST "https://us-central1-suna-deployment-1749244914.cloudfunctions.net/suna-stop-agent" \
+  -H "Authorization: Bearer $FIREBASE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"agent_run_id": "314e777c-58e1-4f24-b2d4-188f95efc026"}'
+```
+
+---
+
+### 5. Stop Agent & Delete Sandbox
 
 **POST** `/suna-stop-sandbox`
 
@@ -254,6 +289,18 @@ class SunaAPI {
   }
 
   async stopAgent(agentRunId) {
+    const response = await fetch(`${this.baseURL}/suna-stop-agent`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ agent_run_id: agentRunId })
+    });
+    return response.json();
+  }
+
+  async stopAndDeleteSandbox(agentRunId) {
     const response = await fetch(`${this.baseURL}/suna-stop-sandbox`, {
       method: 'POST',
       headers: {
