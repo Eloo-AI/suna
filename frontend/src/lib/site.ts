@@ -1,11 +1,10 @@
 export const siteConfig = {
-  name: 'Kortix Suna',
-  url: 'https://suna.so/',
-  description: 'Kortix AI',
+  name: 'Eloo AI',
+  url: 'https://eloo.ai/',
+  description: 'Eloo AI',
   links: {
-    twitter: 'https://x.com/kortixai',
-    github: 'https://github.com/kortix-ai/',
-    linkedin: 'https://www.linkedin.com/company/kortix/',
+    github: 'https://github.com/Eloo-AI/',
+    linkedin: 'https://www.linkedin.com/company/eloo-ai/',
   },
 };
 

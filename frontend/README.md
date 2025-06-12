@@ -1,4 +1,4 @@
-# Suna frontend
+# Eloo AI frontend
 
 ## Getting Started
 

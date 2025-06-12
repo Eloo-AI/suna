@@ -3,11 +3,11 @@ import { redirect } from 'next/navigation';
 import { isFlagEnabled } from '@/lib/feature-flags';
 
 export const metadata: Metadata = {
-  title: 'Create Agent | Kortix Suna',
-  description: 'Interactive agent playground powered by Kortix Suna',
+      title: 'Create Agent | Eloo AI',
+    description: 'Interactive agent playground powered by Eloo AI',
   openGraph: {
-    title: 'Agent Playground | Kortix Suna',
-    description: 'Interactive agent playground powered by Kortix Suna',
+          title: 'Agent Playground | Eloo AI',
+      description: 'Interactive agent playground powered by Eloo AI',
     type: 'website',
   },
 };
