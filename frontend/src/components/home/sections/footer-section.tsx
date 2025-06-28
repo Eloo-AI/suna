@@ -20,10 +20,10 @@ export function FooterSection() {
   }, []);
 
   const logoSrc = !mounted
-    ? '/kortix-logo.svg'
+    ? '/eloo-logo.svg'
     : resolvedTheme === 'dark'
-      ? '/kortix-logo-white.svg'
-      : '/kortix-logo.svg';
+      ? '/eloo-logo-white.svg'
+      : '/eloo-logo.svg';
 
   return (
     <footer id="footer" className="w-full pb-0">
@@ -32,7 +32,7 @@ export function FooterSection() {
           <Link href="/" className="flex items-center gap-2">
             <Image
               src={logoSrc}
-              alt="Kortix Logo"
+              alt="Eloo AI Logo"
               width={122}
               height={22}
               priority
@@ -61,7 +61,7 @@ export function FooterSection() {
               </svg>
             </a>
             <a
-              href="https://x.com/kortixai"
+              href="https://x.com/elooai"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="X (Twitter)"
@@ -78,7 +78,7 @@ export function FooterSection() {
               </svg>
             </a>
             <a
-              href="https://www.linkedin.com/company/kortix/"
+              href="https://www.linkedin.com/company/eloo-ai/"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="LinkedIn"

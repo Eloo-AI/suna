@@ -5,13 +5,13 @@ export const metadata: Metadata = {
   title: siteConfig.name,
   description: siteConfig.description,
   keywords: ['Eloo AI', 'AI', 'Agent'],
-  authors: [
-    {
-      name: 'Kortix AI Corp',
-      url: 'https://kortix.ai',
-    },
-  ],
-  creator: 'Kortix AI Corp',
+      authors: [
+      {
+        name: 'Eloo AI Corp',
+        url: 'https://eloo.ai',
+      },
+    ],
+    creator: 'Eloo AI Corp',
   openGraph: {
     type: 'website',
     locale: 'en_US',
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: siteConfig.name,
     description: siteConfig.description,
-    creator: '@kortixai',
+          creator: '@elooai',
   },
   robots: {
     index: true,

@@ -45,9 +45,9 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: 'Eloo AI Team', url: 'https://eloo.ai' }],
   creator:
-    'Kortix Team - Adam Cohen Hillel, Marko Kraemer, Domenico Gagliardi, and Quoc Dat Le',
+    'Eloo AI Team - Adam Cohen Hillel, Marko Kraemer, Domenico Gagliardi, and Quoc Dat Le',
   publisher:
-    'Kortix Team - Adam Cohen Hillel, Marko Kraemer, Domenico Gagliardi, and Quoc Dat Le',
+    'Eloo AI Team - Adam Cohen Hillel, Marko Kraemer, Domenico Gagliardi, and Quoc Dat Le',
   category: 'Technology',
   applicationName: 'Eloo AI',
   formatDetection: {
@@ -86,8 +86,8 @@ export const metadata: Metadata = {
     title: 'Eloo AI - Open Source Generalist AI Agent',
     description:
       'Eloo AI is a fully open source AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
-    creator: '@kortixai',
-    site: '@kortixai',
+    creator: '@elooai',
+    site: '@elooai',
     images: [
       {
         url: '/banner.png',

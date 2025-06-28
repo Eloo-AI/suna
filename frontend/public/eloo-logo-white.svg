@@ -1,0 +1,8 @@
+<svg width="140" height="32" viewBox="0 0 140 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <text x="8" y="24" font-family="Arial, sans-serif" font-size="24" font-weight="600" fill="#FFFFFF">
+    Eloo AI
+  </text>
+  <circle cx="4" cy="16" r="3" fill="#7C3AED"/>
+  <circle cx="12" cy="16" r="2" fill="#A855F7"/>
+  <circle cx="18" cy="16" r="1.5" fill="#C084FC"/>
+</svg> 
