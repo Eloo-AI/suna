@@ -1,6 +1,7 @@
 services:
   api:
     image: ghcr.io/suna-ai/suna-backend:latest
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile
@@ -10,6 +11,7 @@ services:
       - .env
     volumes:
       - .:/app
+      - /app/.venv
       - ./logs:/app/logs
     restart: unless-stopped
     depends_on:
@@ -39,14 +41,17 @@ services:
       start_period: 40s
 
   worker:
+    image: ghcr.io/suna-ai/suna-backend:latest
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile
-    command: python -m dramatiq --processes 4 --threads 4 run_agent_background
+    command: uv run dramatiq --skip-logging --processes 4 --threads 4 run_agent_background
     env_file:
       - .env
     volumes:
       - .:/app
+      - /app/.venv
       - ./worker-logs:/app/logs
     restart: unless-stopped
     depends_on:

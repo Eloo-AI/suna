@@ -19,4 +19,8 @@ export * from './subscriptions/use-billing';
 
 export * from './dashboard/use-initiate-agent';
 
-export * from './usage/use-health'; 
+export * from './usage/use-health';
+
+export * from './scheduling/use-scheduling';
+
+export * from './knowledge-base/use-knowledge-base-queries'; 

@@ -18,6 +18,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { isLocalMode } from '@/lib/config';
 import { ThreadContent } from '@/components/thread/content/ThreadContent';
 import { ThreadSkeleton } from '@/components/thread/content/ThreadSkeleton';
+import { WorkflowInfo } from '@/components/thread/workflow-info';
 import { useAddUserMessageMutation } from '@/hooks/react-query/threads/use-messages';
 import { useStartAgentMutation, useStopAgentMutation } from '@/hooks/react-query/threads/use-agent-run';
 import { useSubscription } from '@/hooks/react-query/subscriptions/use-subscriptions';
@@ -27,7 +28,7 @@ import { UnifiedMessage, ApiMessageType, ToolCallInput, Project } from '../_type
 import { useThreadData, useToolCalls, useBilling, useKeyboardShortcuts } from '../_hooks';
 import { ThreadError, UpgradeDialog, ThreadLayout } from '../_components';
 import { useVncPreloader } from '@/hooks/useVncPreloader';
-import { useAgent } from '@/hooks/react-query/agents/use-agents';
+import { useThreadAgent } from '@/hooks/react-query/agents/use-agents';
 
 export default function ThreadPage({
   params,
@@ -51,6 +52,7 @@ export default function ThreadPage({
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [initialPanelOpenAttempted, setInitialPanelOpenAttempted] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>(undefined);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -123,7 +125,16 @@ export default function ThreadPage({
   const addUserMessageMutation = useAddUserMessageMutation();
   const startAgentMutation = useStartAgentMutation();
   const stopAgentMutation = useStopAgentMutation();
-  const { data: agent } = useAgent(threadQuery.data?.agent_id);
+  const { data: threadAgentData } = useThreadAgent(threadId);
+  const agent = threadAgentData?.agent;
+  const workflowId = threadQuery.data?.metadata?.workflow_id;
+
+  // Set initial selected agent from thread data
+  useEffect(() => {
+    if (threadAgentData?.agent && !selectedAgentId) {
+      setSelectedAgentId(threadAgentData.agent.agent_id);
+    }
+  }, [threadAgentData, selectedAgentId]);
 
   const { data: subscriptionData } = useSubscription();
   const subscriptionStatus: SubscriptionStatus = subscriptionData?.status === 'active'
@@ -271,7 +282,10 @@ export default function ThreadPage({
 
         const agentPromise = startAgentMutation.mutateAsync({
           threadId,
-          options
+          options: {
+            ...options,
+            agent_id: selectedAgentId
+          }
         });
 
         const results = await Promise.allSettled([messagePromise, agentPromise]);
@@ -601,6 +615,12 @@ export default function ThreadPage({
         initialLoadCompleted={initialLoadCompleted}
         agentName={agent && agent.name}
       >
+        {/* {workflowId && (
+          <div className="px-4 pt-4">
+            <WorkflowInfo workflowId={workflowId} />
+          </div>
+        )} */}
+        
         <ThreadContent
           messages={messages}
           streamingTextContent={streamingTextContent}
@@ -632,7 +652,7 @@ export default function ThreadPage({
               value={newMessage}
               onChange={setNewMessage}
               onSubmit={handleSubmitMessage}
-              placeholder={`Ask ${agent ? agent.name : 'Suna'} anything...`}
+              placeholder={`Describe what you need help with...`}
               loading={isSending}
               disabled={isSending || agentStatus === 'running' || agentStatus === 'connecting'}
               isAgentRunning={agentStatus === 'running' || agentStatus === 'connecting'}
@@ -642,6 +662,8 @@ export default function ThreadPage({
               sandboxId={sandboxId || undefined}
               messages={messages}
               agentName={agent && agent.name}
+              selectedAgentId={selectedAgentId}
+              onAgentSelect={setSelectedAgentId}
             />
           </div>
         </div>
