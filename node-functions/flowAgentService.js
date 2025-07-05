@@ -1,0 +1,724 @@
+const axios = require('axios');
+const logger = require('./logger');
+
+/**
+ * FlowAgent Service - Core service for SUNA API integration with real-time file monitoring
+ * 
+ * This service provides:
+ * - Session initiation with expected files specification
+ * - Background file monitoring with individual file downloads
+ * - Real-time chat with streaming responses
+ * - Phase management for multi-step workflows
+ * - Session cleanup with sandbox archival
+ */
+class FlowAgentService {
+  constructor(config, sunaClient) {
+    this.config = config;
+    this.sunaClient = sunaClient;
+    this.activeSessions = new Map(); // Track active sessions
+    this.fileMonitors = new Map(); // Track file monitoring jobs
+  }
+
+  /**
+   * Initialize a new FlowAgent session
+   * @param {string} prompt - Initial prompt for the agent
+   * @param {Array} expectedFiles - List of files expected to be created (e.g., ['report.html', 'data.json'])
+   * @param {string} modelName - AI model to use
+   * @param {Object} user - Authenticated user context
+   * @returns {Object} Session data with threadId
+   */
+  async initiate(prompt, expectedFiles = [], modelName = 'claude-sonnet-4', user = null, traceId = null) {
+    const trace = traceId || logger.generateTraceId();
+    
+    try {
+      console.log('FlowAgent: Initiating session', { 
+        promptLength: prompt.length, 
+        expectedFiles, 
+        modelName,
+        userEmail: user?.email 
+      });
+
+      // Authenticate with SUNA using service account
+      if (!this.sunaClient.accessToken) {
+        throw new Error('SUNA client not authenticated');
+      }
+
+      // Set user context
+      if (user) {
+        this.sunaClient.setCurrentUser(user);
+      }
+
+      // Initiate session with SUNA
+      const sessionResult = await this.sunaClient.initiateSession(prompt, modelName);
+
+      // Create session tracking object
+      const sessionData = {
+        threadId: sessionResult.thread_id,
+        projectId: sessionResult.project_id,
+        sandboxId: sessionResult.sandbox_id,
+        agentRunId: sessionResult.agent_run_id,
+        expectedFiles: expectedFiles || [],
+        status: 'initiated',
+        createdAt: new Date().toISOString(),
+        user: user,
+        files: {}, // Track file status: { filename: { status, downloadedAt, content, size } }
+        phases: [{
+          phaseNumber: 1,
+          prompt: prompt,
+          agentRunId: sessionResult.agent_run_id,
+          status: 'running',
+          startedAt: new Date().toISOString()
+        }]
+      };
+
+      // Store session
+      this.activeSessions.set(sessionResult.thread_id, sessionData);
+
+      // Log session start with structured logging
+      logger.logSessionStart(
+        trace,
+        sessionResult.thread_id,
+        'unknown', // agentType not available at this level
+        1, // phase
+        expectedFiles,
+        {
+          promptLength: prompt.length,
+          modelName,
+          userEmail: user?.email,
+          sandboxId: sessionResult.sandbox_id,
+          projectId: sessionResult.project_id
+        }
+      );
+
+      console.log('FlowAgent: Session initiated successfully', {
+        threadId: sessionResult.thread_id,
+        sandboxId: sessionResult.sandbox_id,
+        expectedFiles: expectedFiles
+      });
+
+      return {
+        success: true,
+        threadId: sessionResult.thread_id,
+        sessionData: {
+          projectId: sessionResult.project_id,
+          sandboxId: sessionResult.sandbox_id,
+          agentRunId: sessionResult.agent_run_id,
+          expectedFiles: expectedFiles,
+          status: 'initiated'
+        }
+      };
+
+    } catch (error) {
+      console.error('FlowAgent: Session initiation failed', error);
+      throw new Error(`Session initiation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get file status and download ready files for a thread
+   * @param {string} threadId - Thread identifier
+   * @returns {Object} File status and downloaded files
+   */
+  async getFiles(threadId, traceId = null, frontendExpectedFiles = []) {
+    const trace = traceId || logger.generateTraceId();
+    const startTime = Date.now();
+    
+    try {
+      let session = this.activeSessions.get(threadId);
+      
+      // If session not in memory, try to recover from backend
+      if (!session) {
+        console.log('FlowAgent: Session not in memory, attempting recovery', { threadId });
+        logger.logSessionRecovery(trace, threadId, false, { method: 'database' });
+        session = await this.recoverSession(threadId);
+        logger.logSessionRecovery(trace, threadId, true, { 
+          method: 'database',
+          agentType: session.agentType,
+          phase: session.phases[session.phases.length - 1]?.phaseNumber
+        });
+      }
+
+      // Use frontend-provided expected files if available, otherwise fall back to session files
+      const expectedFiles = frontendExpectedFiles.length > 0 ? frontendExpectedFiles : session.expectedFiles;
+      
+      console.log('FlowAgent: Getting files for thread', { 
+        threadId, 
+        frontendExpectedFiles, 
+        sessionExpectedFiles: session.expectedFiles,
+        usingExpectedFiles: expectedFiles 
+      });
+
+      // List current files in sandbox
+      const currentFiles = await this.sunaClient.listSandboxFiles(session.sandboxId);
+      
+      // Filter downloadable files (exclude internal files)
+      const downloadableExtensions = ['.txt', '.json', '.py', '.js', '.ts', '.html', '.css', '.md', '.yml', '.yaml', '.xml', '.csv', '.sql', '.sh', '.env'];
+      const internalFiles = ['todo.md', 'TODO.md', '.todo.md'];
+      
+      const availableFiles = currentFiles.filter(f => 
+        !f.is_dir && 
+        downloadableExtensions.some(ext => f.name.toLowerCase().endsWith(ext)) &&
+        !internalFiles.includes(f.name)
+      );
+
+      const fileStatuses = [];
+      const newlyDownloaded = [];
+
+      // Check each expected file (using frontend-provided or session expected files)
+      for (const expectedFile of expectedFiles) {
+        const fileOnDisk = availableFiles.find(f => f.name === expectedFile);
+        const currentStatus = session.files[expectedFile];
+
+        if (fileOnDisk && (!currentStatus || currentStatus.status === 'pending')) {
+          // File is ready and not yet downloaded - download it
+          try {
+            const filePath = `/workspace/${expectedFile}`;
+            const content = await this.sunaClient.downloadFileContent(session.sandboxId, filePath);
+            
+            // Update session tracking
+            session.files[expectedFile] = {
+              status: 'ready',
+              downloadedAt: new Date().toISOString(),
+              content: content,
+              size: content.length,
+              path: filePath
+            };
+
+            newlyDownloaded.push({
+              name: expectedFile,
+              content: content,
+              size: content.length,
+              downloadedAt: session.files[expectedFile].downloadedAt
+            });
+
+            // Log file download with structured logging
+            logger.logFileDownload(trace, threadId, expectedFile, content.length, {
+              duration: Date.now() - startTime,
+              sandboxId: session.sandboxId
+            });
+
+            console.log('FlowAgent: Downloaded file', { threadId, file: expectedFile, size: content.length });
+
+          } catch (downloadError) {
+            console.warn('FlowAgent: Failed to download file', { threadId, file: expectedFile, error: downloadError.message });
+            session.files[expectedFile] = {
+              status: 'error',
+              error: downloadError.message,
+              checkedAt: new Date().toISOString()
+            };
+          }
+        }
+
+        // Add to status report
+        const fileStatus = session.files[expectedFile] || { status: 'pending' };
+        fileStatuses.push({
+          name: expectedFile,
+          status: fileStatus.status,
+          size: fileStatus.size || null,
+          downloadedAt: fileStatus.downloadedAt || null,
+          error: fileStatus.error || null,
+          available: !!fileOnDisk
+        });
+      }
+
+      // Check for unexpected files that were created
+      const unexpectedFiles = availableFiles.filter(f => 
+        !expectedFiles.includes(f.name) && 
+        !session.files[f.name]
+      );
+
+      for (const unexpectedFile of unexpectedFiles) {
+        try {
+          const filePath = `/workspace/${unexpectedFile.name}`;
+          const content = await this.sunaClient.downloadFileContent(session.sandboxId, filePath);
+          
+          session.files[unexpectedFile.name] = {
+            status: 'unexpected',
+            downloadedAt: new Date().toISOString(),
+            content: content,
+            size: content.length,
+            path: filePath
+          };
+
+          newlyDownloaded.push({
+            name: unexpectedFile.name,
+            content: content,
+            size: content.length,
+            downloadedAt: session.files[unexpectedFile.name].downloadedAt,
+            unexpected: true
+          });
+
+        } catch (error) {
+          console.warn('FlowAgent: Failed to download unexpected file', { 
+            threadId, 
+            file: unexpectedFile.name, 
+            error: error.message 
+          });
+        }
+      }
+
+      // Log file check with structured logging
+      logger.logFileCheck(trace, threadId, 1, 1, fileStatuses, {
+        duration: Date.now() - startTime,
+        sandboxId: session.sandboxId,
+        newFilesDownloaded: newlyDownloaded.length
+      });
+
+      return {
+        success: true,
+        threadId: threadId,
+        fileStatuses: fileStatuses,
+        newlyDownloaded: newlyDownloaded,
+        allFiles: Object.keys(session.files).map(fileName => ({
+          name: fileName,
+          ...session.files[fileName]
+        })),
+        summary: {
+          expected: expectedFiles.length,
+          ready: fileStatuses.filter(f => f.status === 'ready').length,
+          pending: fileStatuses.filter(f => f.status === 'pending').length,
+          error: fileStatuses.filter(f => f.status === 'error').length,
+          unexpected: Object.values(session.files).filter(f => f.status === 'unexpected').length
+        }
+      };
+
+    } catch (error) {
+      logger.logError(trace, threadId, error, {
+        component: 'files',
+        operation: 'get',
+        duration: Date.now() - startTime
+      });
+      console.error('FlowAgent: Get files failed', { threadId, error: error.message });
+      throw new Error(`Get files failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Send a chat message and get streaming response
+   * @param {string} threadId - Thread identifier
+   * @param {string} message - Chat message from user
+   * @param {string} modelName - AI model to use
+   * @returns {Object} Agent run info for streaming
+   */
+  async sendChat(threadId, message, modelName = 'claude-sonnet-4') {
+    try {
+      let session = this.activeSessions.get(threadId);
+      
+      // If session not in memory, try to recover from backend
+      if (!session) {
+        console.log('FlowAgent: Session not in memory for chat, attempting recovery', { threadId });
+        session = await this.recoverSession(threadId);
+      }
+
+      console.log('FlowAgent: Sending chat message', { threadId, messageLength: message.length });
+
+      // Send prompt to SUNA
+      const result = await this.sunaClient.sendPrompt(threadId, message, modelName);
+
+      // Track this as a chat interaction
+      session.chatHistory = session.chatHistory || [];
+      session.chatHistory.push({
+        type: 'user',
+        message: message,
+        timestamp: new Date().toISOString(),
+        agentRunId: result.agent_run_id
+      });
+
+      return {
+        success: true,
+        threadId: threadId,
+        agentRunId: result.agent_run_id,
+        message: 'Chat message sent, streaming available via WebSocket'
+      };
+
+    } catch (error) {
+      console.error('FlowAgent: Send chat failed', { threadId, error: error.message });
+      throw new Error(`Send chat failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Start a new phase (additional file creation)
+   * @param {string} threadId - Thread identifier
+   * @param {string} prompt - Prompt for new phase
+   * @param {Array} expectedFiles - Additional files expected from this phase
+   * @param {string} modelName - AI model to use
+   * @returns {Object} Phase initiation result
+   */
+  async newPhase(threadId, prompt, expectedFiles = [], modelName = 'claude-sonnet-4') {
+    try {
+      let session = this.activeSessions.get(threadId);
+      
+      // If session not in memory, try to recover from backend
+      if (!session) {
+        console.log('FlowAgent: Session not in memory for new phase, attempting recovery', { threadId });
+        session = await this.recoverSession(threadId);
+      }
+
+      console.log('FlowAgent: Starting new phase', { 
+        threadId, 
+        phaseNumber: session.phases.length + 1, 
+        expectedFiles 
+      });
+
+      // Send prompt to SUNA (without streaming for phase creation)
+      const result = await this.sunaClient.sendPrompt(threadId, prompt, modelName);
+
+      // Add new expected files to session tracking
+      for (const file of expectedFiles) {
+        if (!session.files[file]) {
+          session.files[file] = { status: 'pending' };
+        }
+      }
+
+      // Update expected files list
+      session.expectedFiles = [...new Set([...session.expectedFiles, ...expectedFiles])];
+
+      // Track new phase
+      const newPhase = {
+        phaseNumber: session.phases.length + 1,
+        prompt: prompt,
+        agentRunId: result.agent_run_id,
+        expectedFiles: expectedFiles,
+        status: 'running',
+        startedAt: new Date().toISOString()
+      };
+
+      session.phases.push(newPhase);
+
+      return {
+        success: true,
+        threadId: threadId,
+        phaseNumber: newPhase.phaseNumber,
+        agentRunId: result.agent_run_id,
+        expectedFiles: expectedFiles,
+        totalExpectedFiles: session.expectedFiles
+      };
+
+    } catch (error) {
+      console.error('FlowAgent: New phase failed', { threadId, error: error.message });
+      throw new Error(`New phase failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Close session and cleanup sandbox
+   * @param {string} threadId - Thread identifier
+   * @returns {Object} Cleanup result
+   */
+  async closeSession(threadId) {
+    try {
+      let session = this.activeSessions.get(threadId);
+      
+      // If session not in memory, try to recover from backend
+      if (!session) {
+        console.log('FlowAgent: Session not in memory for close, attempting recovery', { threadId });
+        session = await this.recoverSession(threadId);
+      }
+
+      console.log('FlowAgent: Closing session', { threadId, sandboxId: session.sandboxId });
+
+      // Stop file monitoring if active
+      if (this.fileMonitors.has(threadId)) {
+        clearInterval(this.fileMonitors.get(threadId));
+        this.fileMonitors.delete(threadId);
+      }
+
+      // Download final files before cleanup
+      const finalFiles = await this.getFiles(threadId);
+
+      // Stop and archive sandbox (using the fixed backend method)
+      try {
+        // Use the fixed stop sandbox API
+        const stopResult = await axios.post(`${this.config.backend_url}/api/sandboxes/${session.sandboxId}/stop`, {}, {
+          headers: {
+            'Authorization': `Bearer ${this.sunaClient.accessToken}`
+          }
+        });
+
+        console.log('FlowAgent: Sandbox stopped', { threadId, sandboxId: session.sandboxId });
+
+        // Archive sandbox
+        const archiveResult = await axios.post(`${this.config.backend_url}/api/sandboxes/${session.sandboxId}/archive`, {}, {
+          headers: {
+            'Authorization': `Bearer ${this.sunaClient.accessToken}`
+          }
+        });
+
+        console.log('FlowAgent: Sandbox archived', { threadId, sandboxId: session.sandboxId });
+
+      } catch (cleanupError) {
+        console.warn('FlowAgent: Sandbox cleanup failed (session will still be removed)', { 
+          threadId, 
+          error: cleanupError.message 
+        });
+      }
+
+      // Remove session from tracking
+      session.status = 'closed';
+      session.closedAt = new Date().toISOString();
+      
+      // Keep session data for a short time for final file downloads
+      setTimeout(() => {
+        this.activeSessions.delete(threadId);
+      }, 60000); // Remove after 1 minute
+
+      return {
+        success: true,
+        threadId: threadId,
+        sandboxId: session.sandboxId,
+        finalFiles: finalFiles.allFiles,
+        summary: {
+          phases: session.phases.length,
+          totalFiles: Object.keys(session.files).length,
+          chatInteractions: session.chatHistory ? session.chatHistory.length : 0,
+          duration: new Date() - new Date(session.createdAt)
+        }
+      };
+
+    } catch (error) {
+      console.error('FlowAgent: Close session failed', { threadId, error: error.message });
+      throw new Error(`Close session failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get session status
+   * @param {string} threadId - Thread identifier  
+   * @returns {Object} Session status
+   */
+  async getSessionStatus(threadId) {
+    try {
+      let session = this.activeSessions.get(threadId);
+      
+      // If session not in memory, try to recover from backend
+      if (!session) {
+        console.log('FlowAgent: Session not in memory for status, attempting recovery', { threadId });
+        session = await this.recoverSession(threadId);
+      }
+
+      return {
+        success: true,
+        threadId: threadId,
+        status: session.status,
+        expectedFiles: session.expectedFiles,
+        currentPhase: session.phases[session.phases.length - 1],
+        filesSummary: {
+          total: Object.keys(session.files).length,
+          ready: Object.values(session.files).filter(f => f.status === 'ready').length,
+          pending: Object.values(session.files).filter(f => f.status === 'pending').length
+        }
+      };
+    } catch (error) {
+      console.error('FlowAgent: Get session status failed', { threadId, error: error.message });
+      return { success: false, error: `Session status failed: ${error.message}` };
+    }
+  }
+
+  /**
+   * Start file monitoring for a session (called automatically)
+   * @param {string} threadId - Thread identifier
+   * @param {Function} callback - Callback for file updates
+   */
+  startFileMonitoring(threadId, callback) {
+    if (this.fileMonitors.has(threadId)) {
+      return; // Already monitoring
+    }
+
+    console.log('FlowAgent: Starting file monitoring', { threadId });
+
+    const monitor = setInterval(async () => {
+      try {
+        const session = this.activeSessions.get(threadId);
+        if (!session || session.status === 'closed') {
+          clearInterval(monitor);
+          this.fileMonitors.delete(threadId);
+          return;
+        }
+
+        const files = await this.getFiles(threadId);
+        if (files.newlyDownloaded.length > 0) {
+          callback({
+            type: 'files_updated',
+            threadId: threadId,
+            newFiles: files.newlyDownloaded,
+            summary: files.summary
+          });
+        }
+
+      } catch (error) {
+        console.warn('FlowAgent: File monitoring error', { threadId, error: error.message });
+      }
+    }, 10000); // Check every 10 seconds
+
+    this.fileMonitors.set(threadId, monitor);
+  }
+
+  /**
+   * Stop file monitoring for a session
+   * @param {string} threadId - Thread identifier
+   */
+  stopFileMonitoring(threadId) {
+    if (this.fileMonitors.has(threadId)) {
+      clearInterval(this.fileMonitors.get(threadId));
+      this.fileMonitors.delete(threadId);
+      console.log('FlowAgent: Stopped file monitoring', { threadId });
+    }
+  }
+
+  /**
+   * Get expected files for a specific agent type and phase
+   * This mirrors the logic from the frontend MarketResearchAgent.getExpectedFiles()
+   */
+  getExpectedFilesForAgentPhase(agentType, phaseNumber) {
+    switch (agentType) {
+      case 'market':
+        switch (phaseNumber) {
+          case 1:
+            return ['report_phase1.html', 'segments.json'];
+          case 2:
+            return ['report_phase2.html'];
+          case 3:
+            return ['report_phase3.html'];
+          case 4:
+            return ['report_phase4.html', 'personas.json'];
+          default:
+            return [];
+        }
+      case 'icp':
+        switch (phaseNumber) {
+          case 1:
+            return ['report_icp_phase1.html'];
+          case 2:
+            return ['report_icp_phase2.html'];
+          case 3:
+            return ['report_icp_phase3.html'];
+          default:
+            return [];
+        }
+      case 'competitive':
+        switch (phaseNumber) {
+          case 1:
+            return ['report_competitive_phase1.html'];
+          case 2:
+            return ['report_competitive_phase2.html'];
+          default:
+            return [];
+        }
+      default:
+        console.warn(`FlowAgent: Unknown agent type for expected files: ${agentType}`);
+        return [];
+    }
+  }
+
+  /**
+   * Recover session information from backend when not in memory
+   * This handles the stateless nature of Cloud Functions
+   */
+  async recoverSession(threadId) {
+    try {
+      console.log('FlowAgent: Recovering session from backend', { threadId });
+      
+      // Get thread information from Supabase
+      const axios = require('axios');
+      const threadResponse = await axios.get(`${this.config.supabase_url}/rest/v1/threads?thread_id=eq.${threadId}`, {
+        headers: {
+          'apikey': this.config.supabase_anon_key,
+          'Authorization': `Bearer ${this.sunaClient.accessToken}`
+        }
+      });
+
+      if (!threadResponse.data || threadResponse.data.length === 0) {
+        throw new Error(`Thread not found in database: ${threadId}`);
+      }
+
+      const thread = threadResponse.data[0];
+      const projectId = thread.project_id;
+
+      // Get project information to find sandbox
+      const projectResponse = await axios.get(`${this.config.supabase_url}/rest/v1/projects?project_id=eq.${projectId}`, {
+        headers: {
+          'apikey': this.config.supabase_anon_key,
+          'Authorization': `Bearer ${this.sunaClient.accessToken}`
+        }
+      });
+
+      if (!projectResponse.data || projectResponse.data.length === 0) {
+        throw new Error(`Project not found in database: ${projectId}`);
+      }
+
+      const project = projectResponse.data[0];
+      const sandboxId = project.sandbox.sandbox_id || project.sandbox.id;
+
+      // Get recent agent runs for this thread
+      const agentRunsResponse = await axios.get(`${this.config.supabase_url}/rest/v1/agent_runs?thread_id=eq.${threadId}&order=created_at.desc&limit=1`, {
+        headers: {
+          'apikey': this.config.supabase_anon_key,
+          'Authorization': `Bearer ${this.sunaClient.accessToken}`
+        }
+      });
+
+      const latestAgentRun = agentRunsResponse.data[0];
+
+      // Determine expected files based on agent type and current phase
+      const expectedFiles = this.getExpectedFilesForAgentPhase(thread.agent_type, thread.current_phase || 1);
+      
+      console.log('FlowAgent: Determined expected files for recovery', {
+        threadId,
+        agentType: thread.agent_type,
+        currentPhase: thread.current_phase || 1,
+        expectedFiles
+      });
+
+      // Reconstruct session object
+      const recoveredSession = {
+        threadId: threadId,
+        projectId: projectId,
+        sandboxId: sandboxId,
+        agentRunId: latestAgentRun ? latestAgentRun.agent_run_id : null,
+        expectedFiles: expectedFiles, // Properly restored based on agent type and phase
+        status: 'recovered',
+        createdAt: thread.created_at,
+        user: null, // User context not available in recovery
+        files: {}, // Will be populated as files are checked
+        phases: [{
+          phaseNumber: thread.current_phase || 1,
+          prompt: 'Recovered session',
+          agentRunId: latestAgentRun ? latestAgentRun.agent_run_id : null,
+          status: latestAgentRun ? latestAgentRun.status : 'unknown',
+          startedAt: thread.created_at
+        }]
+      };
+
+      // Store recovered session in memory for subsequent calls
+      this.activeSessions.set(threadId, recoveredSession);
+
+      console.log('FlowAgent: Session recovered successfully', {
+        threadId,
+        projectId,
+        sandboxId,
+        agentRunId: recoveredSession.agentRunId
+      });
+
+      return recoveredSession;
+
+    } catch (error) {
+      console.error('FlowAgent: Session recovery failed', { threadId, error: error.message });
+      throw new Error(`Session recovery failed for ${threadId}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get active sessions (for debugging)
+   */
+  getActiveSessions() {
+    return Array.from(this.activeSessions.keys()).map(threadId => ({
+      threadId,
+      status: this.activeSessions.get(threadId).status,
+      createdAt: this.activeSessions.get(threadId).createdAt,
+      expectedFiles: this.activeSessions.get(threadId).expectedFiles.length
+    }));
+  }
+}
+
+module.exports = { FlowAgentService };

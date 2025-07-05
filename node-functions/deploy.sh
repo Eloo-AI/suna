@@ -10,85 +10,90 @@ RUNTIME="nodejs20"
 MEMORY="512MB"
 TIMEOUT="60s"
 
-echo "🚀 Deploying Suna Cloud Functions to project: $PROJECT_ID"
+echo "🚀 Deploying Suna Cloud Functions to project: $PROJECT_ID (10 functions at a time)"
 
 # Set the project
 gcloud config set project $PROJECT_ID
 
-# Deploy health check function first
-echo "📋 Deploying health check function..."
-gcloud functions deploy suna-health \
-  --runtime $RUNTIME \
-  --trigger-http \
-  --allow-unauthenticated \
-  --env-vars-file .env.yaml \
-  --source . \
-  --entry-point health \
-  --memory $MEMORY \
-  --timeout $TIMEOUT \
-  --region $REGION
+# Function to deploy a single function
+deploy_function() {
+    local name=$1
+    local entry_point=$2
+    local timeout=${3:-$TIMEOUT}
+    local description=$4
+    
+    echo "📋 Deploying $description..."
+    gcloud functions deploy $name \
+        --runtime $RUNTIME \
+        --trigger-http \
+        --allow-unauthenticated \
+        --env-vars-file .env.yaml \
+        --source . \
+        --entry-point $entry_point \
+        --memory $MEMORY \
+        --timeout $timeout \
+        --region $REGION \
+        --quiet &
+}
 
-# Deploy initiate agent function
-echo "🎯 Deploying initiate agent function..."
-gcloud functions deploy suna-initiate \
-  --runtime $RUNTIME \
-  --trigger-http \
-  --allow-unauthenticated \
-  --env-vars-file .env.yaml \
-  --source . \
-  --entry-point initiateAgent \
-  --memory $MEMORY \
-  --timeout $TIMEOUT \
-  --region $REGION
+echo ""
+echo "🔄 Starting parallel deployment - Batch 1 (10 functions)..."
 
-# Deploy poll and download function
-echo "📥 Deploying poll and download function..."
-gcloud functions deploy suna-poll \
-  --runtime $RUNTIME \
-  --trigger-http \
-  --allow-unauthenticated \
-  --env-vars-file .env.yaml \
-  --source . \
-  --entry-point pollAndDownload \
-  --memory $MEMORY \
-  --timeout $TIMEOUT \
-  --region $REGION
+# Batch 1: Legacy + FlowAgent Functions (10 functions)
+deploy_function "suna-health" "health" "$TIMEOUT" "health check function"
+deploy_function "suna-initiate" "initiateSession" "$TIMEOUT" "initiate session function"
+deploy_function "suna-poll" "pollAndDownload" "$TIMEOUT" "poll and download function"
+deploy_function "suna-stop-sandbox" "stopAndDeleteSandbox" "$TIMEOUT" "stop and delete sandbox function"
+deploy_function "suna-stop-agent" "stopAgent" "$TIMEOUT" "stop agent function"
+deploy_function "suna-send-prompt" "sendPrompt" "$TIMEOUT" "send prompt function"
+deploy_function "suna-stream-response" "streamResponse" "$TIMEOUT" "stream response function"
+deploy_function "flowagent-initiate" "flowagent-initiate" "$TIMEOUT" "FlowAgent initiate function"
+deploy_function "flowagent-files" "flowagent-files" "$TIMEOUT" "FlowAgent files function"
+deploy_function "flowagent-chat" "flowagent-chat" "$TIMEOUT" "FlowAgent chat function"
 
-# Deploy stop and delete sandbox function
-echo "🛑 Deploying stop and delete sandbox function..."
-gcloud functions deploy suna-stop-sandbox \
-  --runtime $RUNTIME \
-  --trigger-http \
-  --allow-unauthenticated \
-  --env-vars-file .env.yaml \
-  --source . \
-  --entry-point stopAndDeleteSandbox \
-  --memory $MEMORY \
-  --timeout $TIMEOUT \
-  --region $REGION
+# Wait for batch 1 to complete
+wait
+echo "✅ Batch 1 completed!"
 
-# Deploy stop agent function
-echo "🛑 Deploying stop agent function..."
-gcloud functions deploy suna-stop-agent \
-  --runtime $RUNTIME \
-  --trigger-http \
-  --allow-unauthenticated \
-  --env-vars-file .env.yaml \
-  --source . \
-  --entry-point stopAgent \
-  --memory $MEMORY \
-  --timeout $TIMEOUT \
-  --region $REGION
+echo ""
+echo "🔄 Starting parallel deployment - Batch 2 (6 functions)..."
+
+# Batch 2: Remaining FlowAgent + Auth Functions (6 functions)
+deploy_function "flowagent-new-phase" "flowagent-new-phase" "$TIMEOUT" "FlowAgent new phase function"
+deploy_function "flowagent-close" "flowagent-close" "$TIMEOUT" "FlowAgent close function"
+deploy_function "flowagent-status" "flowagent-status" "$TIMEOUT" "FlowAgent status function"
+deploy_function "flowagent-stream" "flowagent-stream" "600s" "FlowAgent stream function"
+deploy_function "flowagent-download" "flowagent-download" "$TIMEOUT" "FlowAgent download function"
+deploy_function "auth-cookie" "auth-cookie" "$TIMEOUT" "auth cookie function"
+
+# Wait for batch 2 to complete
+wait
+echo "✅ Batch 2 completed!"
 
 echo ""
 echo "✅ All functions deployed successfully!"
 echo ""
 echo "📄 Function URLs:"
+echo ""
+echo "Legacy Functions:"
 echo "   Health: https://$REGION-$PROJECT_ID.cloudfunctions.net/suna-health"
-echo "   Initiate: https://$REGION-$PROJECT_ID.cloudfunctions.net/suna-initiate"
+echo "   Initiate Session: https://$REGION-$PROJECT_ID.cloudfunctions.net/suna-initiate"
 echo "   Poll: https://$REGION-$PROJECT_ID.cloudfunctions.net/suna-poll"
+echo "   Send Prompt: https://$REGION-$PROJECT_ID.cloudfunctions.net/suna-send-prompt"
+echo "   Stream Response: https://$REGION-$PROJECT_ID.cloudfunctions.net/suna-stream-response"
 echo "   Stop Agent: https://$REGION-$PROJECT_ID.cloudfunctions.net/suna-stop-agent"
 echo "   Stop & Delete: https://$REGION-$PROJECT_ID.cloudfunctions.net/suna-stop-sandbox"
+echo ""
+echo "FlowAgent Functions (New):"
+echo "   Initiate: https://$REGION-$PROJECT_ID.cloudfunctions.net/flowagent-initiate"
+echo "   Files: https://$REGION-$PROJECT_ID.cloudfunctions.net/flowagent-files"
+echo "   Chat: https://$REGION-$PROJECT_ID.cloudfunctions.net/flowagent-chat"
+echo "   New Phase: https://$REGION-$PROJECT_ID.cloudfunctions.net/flowagent-new-phase"
+echo "   Close: https://$REGION-$PROJECT_ID.cloudfunctions.net/flowagent-close"
+echo "   Status: https://$REGION-$PROJECT_ID.cloudfunctions.net/flowagent-status"
+echo "   Stream: https://$REGION-$PROJECT_ID.cloudfunctions.net/flowagent-stream"
+echo "   Download: https://$REGION-$PROJECT_ID.cloudfunctions.net/flowagent-download"
+echo "   Auth Cookie: https://$REGION-$PROJECT_ID.cloudfunctions.net/auth-cookie"
 echo ""
 echo "🔧 To view logs: gcloud functions logs read <function-name> --limit=50"
 echo "🔧 To update environment: Edit .env.yaml and redeploy"
