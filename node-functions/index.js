@@ -563,7 +563,7 @@ class SunaClient {
       formData.append('model_name', modelName);
       formData.append('enable_thinking', 'false');
       formData.append('reasoning_effort', 'low');
-      formData.append('stream', 'false');
+      formData.append('stream', 'true');
       formData.append('enable_context_manager', 'false');
 
       // Initiate session
@@ -876,6 +876,20 @@ class SunaClient {
     }
 
     try {
+      // Send user message
+      await axios.post(`${config.supabase_url}/rest/v1/messages`, {
+        content: JSON.stringify({"role":"user","content":prompt}),
+        is_llm_message: true,
+        thread_id: threadId,
+        type: "user"
+      }, {
+        headers: {
+          'apikey': config.supabase_anon_key,
+          'Authorization': `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
       // Start agent for the thread
       const startResponse = await axios.post(`${config.backend_url}/api/thread/${threadId}/agent/start`, {
         model_name: modelName,
@@ -890,20 +904,6 @@ class SunaClient {
       });
 
       const { agent_run_id } = startResponse.data;
-
-      // Send user message
-      await axios.post(`${config.supabase_url}/rest/v1/messages`, {
-        content: JSON.stringify({"role":"user","content":prompt}),
-        is_llm_message: true,
-        thread_id: threadId,
-        type: "user"
-      }, {
-        headers: {
-          'apikey': config.supabase_anon_key,
-          'Authorization': `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
 
       return {
         success: true,

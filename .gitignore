@@ -204,3 +204,4 @@ backend/.env.server
 node-functions/.env.yaml
 /node-functions/node_modules
 /node_modules
+frontend/.claude/settings.local.json

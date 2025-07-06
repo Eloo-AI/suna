@@ -1,0 +1,250 @@
+# Agent running flow:
+
+1. initiate the suna session:
+  URL: http://localhost:8000/api/agent/initiate
+  Type: POST
+  Payload format: Form-data
+  Payload:
+    prompt: create a hello world html page
+    model_name: claude-sonnet-4
+    enable_thinking: false
+    reasoning_effort: low
+    stream: false
+    enable_context_manager: false
+  Response:
+    {
+      "thread_id": "976bee28-ecad-41a9-868b-9d10c1d25cc5",
+      "agent_run_id": "339d4a99-1ec2-4d83-8ba7-95447b86c5a3"
+    }
+
+2. get the thread data:
+  URL: https://nmwqprgbxtnikkmwhwyt.supabase.co/rest/v1/threads?select=*&thread_id=eq.976bee28-ecad-41a9-868b-9d10c1d25cc5
+  Type: GET
+  Payload type : Query params
+  Payload:
+    select: *
+    thread_id: eq.976bee28-ecad-41a9-868b-9d10c1d25cc5
+  Response:
+    {
+    "thread_id": "976bee28-ecad-41a9-868b-9d10c1d25cc5",
+    "account_id": "e287510d-3a61-4e64-8cff-8a0f05865df0",
+    "project_id": "8c5b1a3c-acd0-4454-b1b0-6c731aa8230f",
+    "is_public": false,
+    "created_at": "2025-06-30T12:47:42.924812+00:00",
+    "updated_at": "2025-06-30T12:47:43.03704+00:00",
+    "agent_id": null,
+    "metadata": {},
+    "agent_version_id": null
+  }
+
+
+3. get the agent run data:
+  URL: http://localhost:8000/api/thread/976bee28-ecad-41a9-868b-9d10c1d25cc5/agent-runs
+  Type: GET
+  Payload type : None
+  Response:
+    {
+        "agent_runs": [
+            {
+                "id": "339d4a99-1ec2-4d83-8ba7-95447b86c5a3",
+                "thread_id": "976bee28-ecad-41a9-868b-9d10c1d25cc5",
+                "status": "running",
+                "started_at": "2025-06-30T12:47:43.170935+00:00",
+                "completed_at": null,
+                "error": null,
+                "created_at": "2025-06-30T12:47:43.286823+00:00",
+                "updated_at": "2025-06-30T12:47:43.286823+00:00"
+            }
+        ]
+    }
+
+4. get the sandbox data:
+  URL: http://localhost:8000/api/project/8c5b1a3c-acd0-4454-b1b0-6c731aa8230f/sandbox/ensure-active
+  Type: GET
+  Payload type : None
+  Response:
+    {
+        "status": "success",
+        "sandbox_id": "ba3cc40d-109b-4102-936b-39c65ae50229",
+        "message": "Sandbox is active"
+    }
+
+5. check agent run status:
+  URL: http://localhost:8000/api/agent-run/339d4a99-1ec2-4d83-8ba7-95447b86c5a3
+  Type: GET
+  Payload type : None
+  Response:
+    {
+        "id": "339d4a99-1ec2-4d83-8ba7-95447b86c5a3",
+        "threadId": "976bee28-ecad-41a9-868b-9d10c1d25cc5",
+        "status": "running",
+        "startedAt": "2025-06-30T12:47:43.170935+00:00",
+        "completedAt": null,
+        "error": null
+    }
+
+6. check health of the agent:
+  URL: http://localhost:8000/api/health
+  Type: GET
+  Payload type : None
+  Response:
+    {
+        "status": "ok",
+        "timestamp": "2025-06-30T12:48:08.678429+00:00",
+        "instance_id": "single"
+    }
+    
+7. get the sandbox files:
+  URL: http://localhost:8000/api/sandboxes/ba3cc40d-109b-4102-936b-39c65ae50229/files/content?path=%2Fworkspace%2Findex.html
+  Type: GET
+  Payload type : Query params
+  Payload:
+    path: /workspace/index.html
+  Response:
+    downloaded file
+
+
+# after finish of first artifact and download it - the user can send additional prompts. 
+8. First, call start agent:
+  URL: http://localhost:8000/api/thread/976bee28-ecad-41a9-868b-9d10c1d25cc5/agent/start
+  Type: POST
+  Payload type : JSON
+  Payload:
+    {model_name: "claude-sonnet-4", enable_thinking: false, reasoning_effort: "low", stream: true}
+  Response:
+    {"agent_run_id":"d331070e-b177-4469-a1b0-eaa9b8171699","status":"running"}
+
+9. Then, send the user message:
+  URL: https://nmwqprgbxtnikkmwhwyt.supabase.co/rest/v1/messages
+  Type: POST
+  Payload type : JSON
+  Payload:
+    {
+      content: "{\"role\":\"user\",\"content\":\"is that html?\"}"  
+      is_llm_message: true
+      thread_id: "976bee28-ecad-41a9-868b-9d10c1d25cc5"
+      type: "user"
+    }
+
+  Response: none (201)
+
+10. get the agent run data:
+  URL: http://localhost:8000/api/thread/976bee28-ecad-41a9-868b-9d10c1d25cc5/agent-runs
+  Type: GET
+  Payload type : None
+  Response:
+    {
+        "agent_runs": [
+            {
+                "id": "d331070e-b177-4469-a1b0-eaa9b8171699",
+                "thread_id": "976bee28-ecad-41a9-868b-9d10c1d25cc5",
+                "status": "running",
+                "started_at": "2025-06-30T12:49:44.888665+00:00",
+                "completed_at": null,
+                "error": null,
+                "created_at": "2025-06-30T12:49:45.00497+00:00",
+                "updated_at": "2025-06-30T12:49:45.00497+00:00"
+            },
+            {
+                "id": "339d4a99-1ec2-4d83-8ba7-95447b86c5a3",
+                "thread_id": "976bee28-ecad-41a9-868b-9d10c1d25cc5",
+                "status": "completed",
+                "started_at": "2025-06-30T12:47:43.170935+00:00",
+                "completed_at": "2025-06-30T12:48:30.350311+00:00",
+                "error": null,
+                "created_at": "2025-06-30T12:47:43.286823+00:00",
+                "updated_at": "2025-06-30T12:48:30.716276+00:00"
+            }
+        ]
+    } 
+11. query the messages history. we need to take only messages from after the start command (after first artifact was created):
+  URL: https://nmwqprgbxtnikkmwhwyt.supabase.co/rest/v1/messages?select=*%2Cagents%3Aagent_id%28name%2Cavatar%2Cavatar_color%29&thread_id=eq.976bee28-ecad-41a9-868b-9d10c1d25cc5&type=neq.cost&type=neq.summary&order=created_at.asc&offset=0&limit=1000
+  Type: GET
+  Payload type : Query params
+  Payload:
+    token: ey.....
+    
+  Response: (partial list of messages)
+    [
+      {
+        "message_id": "8cbbc5c3-090f-49cb-9c4c-e7f563a6aad3",
+        "thread_id": "976bee28-ecad-41a9-868b-9d10c1d25cc5",
+        "type": "status",
+        "is_llm_message": false,
+        "content": {
+            "status_type": "thread_run_end"
+        },
+        "metadata": {
+            "thread_run_id": "98f73fb2-0d53-40cb-a4a8-7424fb6cdfd6"
+        },
+        "created_at": "2025-06-30T12:48:30.313892+00:00",
+        "updated_at": "2025-06-30T12:48:30.313892+00:00",
+        "agent_id": null,
+        "agent_version_id": null,
+        "agents": null
+      },
+      {
+        "message_id": "b16e4d43-c529-421e-9dda-c3a61b2ad5be",
+        "thread_id": "976bee28-ecad-41a9-868b-9d10c1d25cc5",
+        "type": "user",
+        "is_llm_message": true,
+        "content": "{\"role\":\"user\",\"content\":\"is that html?\"}",
+        "metadata": {},
+        "created_at": "2025-06-30T12:49:43.81104+00:00",
+        "updated_at": "2025-06-30T12:49:43.81104+00:00",
+        "agent_id": null,
+        "agent_version_id": null,
+        "agents": null
+      }
+    ]
+
+12. we can now chat with the agent via stream (initiate was without stream, but chat is with stream):
+  URL: http://localhost:8000/api/agent-run/d331070e-b177-4469-a1b0-eaa9b8171699/stream?token=eyJhbGciOiJIUzI1NiIsImtpZCI6Imk4bFpxaGJHUTRnUVl0cVAiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL25td3FwcmdieHRuaWtrbXdod3l0LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJlMjg3NTEwZC0zYTYxLTRlNjQtOGNmZi04YTBmMDU4NjVkZjAiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzUxMjkxMTQ1LCJpYXQiOjE3NTEyODc1NDUsImVtYWlsIjoiZ2FsQGVsb28uYWkiLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsIjoiZ2FsQGVsb28uYWkiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJzdWIiOiJlMjg3NTEwZC0zYTYxLTRlNjQtOGNmZi04YTBmMDU4NjVkZjAifSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJwYXNzd29yZCIsInRpbWVzdGFtcCI6MTc0OTM4MjYzNX1dLCJzZXNzaW9uX2lkIjoiNjNlZjVmNGMtZmFiMi00ZmE1LTljMmEtNDhkY2M0YmQwZDI2IiwiaXNfYW5vbnltb3VzIjpmYWxzZX0.mjjpaP4P0H3Ot7VsUmC1CC1vMZMZog-hqzM7cdHiViY
+  Type: GET
+  Payload type : Query params
+  Payload:
+    token: ey.....
+
+  Response:
+    stream of messages, for example (this is partial list):
+      {"message_id": "db2855ab-741e-45ae-b2d5-97dc127c1c3f", "thread_id": "976bee28-ecad-41a9-868b-9d10c1d25cc5", "type": "status", "is_llm_message": false, "content": "{\"status_type\": \"assistant_response_start\"}", "metadata": "{\"thread_run_id\": \"f9d92f83-08e9-42de-ad94-3cedbd8ee16c\"}", "created_at": "2025-06-30T12:49:51.79413+00:00", "updated_at": "2025-06-30T12:49:51.79413+00:00", "agent_id": null, "agent_version_id": null}
+      {"sequence": 0, "message_id": null, "thread_id": "976bee28-ecad-41a9-868b-9d10c1d25cc5", "type": "assistant", "is_llm_message": true, "content": "{\"role\": \"assistant\", \"content\": \"Yes\"}", "metadata": "{\"stream_status\": \"chunk\", \"thread_run_id\": \"f9d92f83-08e9-42de-ad94-3cedbd8ee16c\"}", "created_at": "2025-06-30T12:49:51.838080+00:00", "updated_at": "2025-06-30T12:49:51.838080+00:00"}
+      {"sequence": 10, "message_id": null, "thread_id": "976bee28-ecad-41a9-868b-9d10c1d25cc5", "type": "assistant", "is_llm_message": true, "content": "{\"role\": \"assistant\", \"content\": \"</parameter>\\n<parameter name=\\\"new_\"}", "metadata": "{\"stream_status\": \"chunk\", \"thread_run_id\": \"ff0105af-6842-4bac-93c3-418687d67afa\"}", "created_at": "2025-06-30T12:50:48.478558+00:00", "updated_at": "2025-06-30T12:50:48.478558+00:00"}
+      {"message_id": "382c31a5-d90e-447a-b08b-a39d3c4c46f5", "thread_id": "976bee28-ecad-41a9-868b-9d10c1d25cc5", "type": "status", "is_llm_message": false, "content": "{\"role\": \"assistant\", \"message\": \"Starting execution of str-replace\", \"tool_index\": 0, \"status_type\": \"tool_started\", \"tool_call_id\": null, \"xml_tag_name\": \"str-replace\", \"function_name\": \"str_replace\"}", "metadata": "{\"thread_run_id\": \"ff0105af-6842-4bac-93c3-418687d67afa\"}", "created_at": "2025-06-30T12:50:48.839173+00:00", "updated_at": "2025-06-30T12:50:48.839173+00:00", "agent_id": null, "agent_version_id": null}      
+      {"sequence": 54, "message_id": null, "thread_id": "976bee28-ecad-41a9-868b-9d10c1d25cc5", "type": "assistant", "is_llm_message": true, "content": "{\"role\": \"assistant\", \"content\": \">\\n</invoke>\\n</function_calls>\"}", "metadata": "{\"stream_status\": \"chunk\", \"thread_run_id\": \"f9d92f83-08e9-42de-ad94-3cedbd8ee16c\"}", "created_at": "2025-06-30T12:49:58.923038+00:00", "updated_at": "2025-06-30T12:49:58.923038+00:00"}
+      {"message_id": "f5d888c5-7568-4db4-9271-2a2292fc506b", "thread_id": "976bee28-ecad-41a9-868b-9d10c1d25cc5", "type": "status", "is_llm_message": false, "content": "{\"status_type\": \"finish\", \"finish_reason\": \"agent_terminated\"}", "metadata": "{\"thread_run_id\": \"f9d92f83-08e9-42de-ad94-3cedbd8ee16c\"}", "created_at": "2025-06-30T12:49:59.737285+00:00", "updated_at": "2025-06-30T12:49:59.737285+00:00", "agent_id": null, "agent_version_id": null}
+      {"type": "status", "status": "completed", "message": "Agent run completed successfully"}
+
+
+
+
+
+The rest of the apis sequence that we dont want to implement now:
+http://localhost:8000/api/agent-run/d331070e-b177-4469-a1b0-eaa9b8171699
+https://nmwqprgbxtnikkmwhwyt.supabase.co/rest/v1/messages?select=*%2Cagents%3Aagent_id%28name%2Cavatar%2Cavatar_color%29&thread_id=eq.976bee28-ecad-41a9-868b-9d10c1d25cc5&type=neq.cost&type=neq.summary&order=created_at.asc&offset=0&limit=1000
+http://localhost:8000/api/health
+http://localhost:8000/api/thread/976bee28-ecad-41a9-868b-9d10c1d25cc5/agent/start
+https://nmwqprgbxtnikkmwhwyt.supabase.co/rest/v1/messages
+http://localhost:8000/api/thread/976bee28-ecad-41a9-868b-9d10c1d25cc5/agent-runs
+https://nmwqprgbxtnikkmwhwyt.supabase.co/rest/v1/messages?select=*%2Cagents%3Aagent_id%28name%2Cavatar%2Cavatar_color%29&thread_id=eq.976bee28-ecad-41a9-868b-9d10c1d25cc5&type=neq.cost&type=neq.summary&order=created_at.asc&offset=0&limit=1000
+http://localhost:8000/api/agent-run/6e8d1988-d71e-4cc0-8625-0e073edd1263
+http://localhost:8000/api/agent-run/6e8d1988-d71e-4cc0-8625-0e073edd1263
+http://localhost:8000/api/agent-run/6e8d1988-d71e-4cc0-8625-0e073edd1263/stream?token=eyJhbGciOiJIUzI1NiIsImtpZCI6Imk4bFpxaGJHUTRnUVl0cVAiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL25td3FwcmdieHRuaWtrbXdod3l0LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJlMjg3NTEwZC0zYTYxLTRlNjQtOGNmZi04YTBmMDU4NjVkZjAiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzUxMjkxMTQ1LCJpYXQiOjE3NTEyODc1NDUsImVtYWlsIjoiZ2FsQGVsb28uYWkiLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsIjoiZ2FsQGVsb28uYWkiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJzdWIiOiJlMjg3NTEwZC0zYTYxLTRlNjQtOGNmZi04YTBmMDU4NjVkZjAifSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJwYXNzd29yZCIsInRpbWVzdGFtcCI6MTc0OTM4MjYzNX1dLCJzZXNzaW9uX2lkIjoiNjNlZjVmNGMtZmFiMi00ZmE1LTljMmEtNDhkY2M0YmQwZDI2IiwiaXNfYW5vbnltb3VzIjpmYWxzZX0.mjjpaP4P0H3Ot7VsUmC1CC1vMZMZog-hqzM7cdHiViY
+http://localhost:8000/api/health
+http://localhost:8000/api/sandboxes/ba3cc40d-109b-4102-936b-39c65ae50229/files/content?path=%2Fworkspace%2Findex.html
+http://localhost:8000/api/agent-run/6e8d1988-d71e-4cc0-8625-0e073edd1263
+https://nmwqprgbxtnikkmwhwyt.supabase.co/rest/v1/messages?select=*%2Cagents%3Aagent_id%28name%2Cavatar%2Cavatar_color%29&thread_id=eq.976bee28-ecad-41a9-868b-9d10c1d25cc5&type=neq.cost&type=neq.summary&order=created_at.asc&offset=0&limit=1000
+
+http://localhost:8000/api/feature-flags/custom_agents
+http://localhost:8000/api/feature-flags/agent_marketplace
+http://localhost:8000/api/feature-flags/workflows
+http://localhost:8000/api/feature-flags/knowledge_base
+http://localhost:8000/api/feature-flags/custom_agents
+http://localhost:8000/api/sandboxes/ba3cc40d-109b-4102-936b-39c65ae50229/files/content?path=%2Fworkspace%2Findex.html
+http://localhost:8000/api/billing/subscription
+http://localhost:8000/api/thread/976bee28-ecad-41a9-868b-9d10c1d25cc5/agent-runs
+https://nmwqprgbxtnikkmwhwyt.supabase.co/rest/v1/threads?select=*&thread_id=eq.976bee28-ecad-41a9-868b-9d10c1d25cc5
+https://nmwqprgbxtnikkmwhwyt.supabase.co/rest/v1/messages?select=*%2Cagents%3Aagent_id%28name%2Cavatar%2Cavatar_color%29&thread_id=eq.976bee28-ecad-41a9-868b-9d10c1d25cc5&type=neq.cost&type=neq.summary&order=created_at.asc&offset=0&limit=1000
+https://nmwqprgbxtnikkmwhwyt.supabase.co/rest/v1/projects?select=*&project_id=eq.8c5b1a3c-acd0-4454-b1b0-6c731aa8230f
+https://nmwqprgbxtnikkmwhwyt.supabase.co/rest/v1/rpc/get_accounts
+http://localhost:8000/api/project/8c5b1a3c-acd0-4454-b1b0-6c731aa8230f/sandbox/ensure-active
