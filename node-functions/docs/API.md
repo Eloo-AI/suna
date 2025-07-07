@@ -115,6 +115,26 @@ Ensure a sandbox is active for a project.
 }
 ```
 
+### DELETE /eloo-agent-sandbox-delete
+Stop an agent run and delete its associated sandbox.
+
+**Request:**
+```json
+{
+  "agentRunId": "uuid"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "agent_run_id": "uuid",
+  "sandbox_id": "uuid",
+  "message": "Agent stopped and sandbox deleted successfully"
+}
+```
+
 ### GET /eloo-agent-stream?threadId=uuid&agentRunId=uuid
 Real-time streaming of agent responses via Server-Sent Events.
 
@@ -247,6 +267,29 @@ Download a specific file from a FlowAgent session.
 **Response:** File content with appropriate headers.
 
 ## 🛠️ Utility Functions
+
+### GET /eloo-agent-list-files?sandboxId=uuid&filePath=/workspace
+List all files in a sandbox directory.
+
+**Response:**
+```json
+{
+  "success": true,
+  "sandboxId": "uuid",
+  "filePath": "/workspace",
+  "files": [
+    {
+      "name": "file1.html",
+      "type": "file",
+      "size": 1024
+    },
+    {
+      "name": "subdirectory",
+      "type": "directory"
+    }
+  ]
+}
+```
 
 ### GET /eloo-download-file?sandboxId=uuid&fileName=file.html
 Download a file directly from a sandbox.

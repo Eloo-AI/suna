@@ -552,6 +552,159 @@ functions.http('eloo-agent-run-status', ErrorHandler.asyncHandler(async (req, re
   });
 }));
 
+/**
+ * Agent Sandbox Delete - Stop an agent run and delete its associated sandbox
+ * DELETE /eloo-agent-sandbox-delete
+ * Body: { agentRunId: string }
+ * Returns: { success: boolean, agent_run_id: string, sandbox_id: string, message: string }
+ */
+functions.http('eloo-agent-sandbox-delete', ErrorHandler.asyncHandler(async (req, res) => {
+  corsMiddleware(req, res, async () => {
+    rateLimitMiddleware(req, res, async () => {
+      await authenticateRequest(req, res, async () => {
+        // Only allow DELETE method
+        if (req.method !== 'DELETE') {
+          return res.status(405).json({
+            success: false,
+            error: 'Method not allowed. Use DELETE method.'
+          });
+        }
+        
+        const { agentRunId } = req.body;
+        
+        // Validate agent run ID
+        if (!agentRunId || typeof agentRunId !== 'string') {
+          return res.status(400).json({
+            success: false,
+            error: 'Agent run ID is required and must be a string'
+          });
+        }
+        
+        // UUID v4 format validation for agent run ID
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(agentRunId)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid agent run ID format'
+          });
+        }
+        
+        // Get service account auth
+        const auth = await getServiceAccountAuth();
+        const client = auth.client;
+        client.setCurrentUser(req.user);
+        
+        try {
+          // Get agent run details to find thread ID
+          const runStatus = await client.getAgentRunStatus(agentRunId);
+          const threadId = runStatus.threadId || runStatus.thread_id;
+
+          if (!threadId) {
+            return res.status(400).json({
+              success: false,
+              error: 'Could not derive thread_id from agent run'
+            });
+          }
+
+          // Get thread details to find project ID
+          const threadResponse = await axios.get(`${config.supabase_url}/rest/v1/threads?thread_id=eq.${threadId}`, {
+            headers: {
+              'apikey': config.supabase_anon_key,
+              'Authorization': `Bearer ${client.accessToken}`
+            }
+          });
+
+          if (!threadResponse.data || threadResponse.data.length === 0) {
+            return res.status(404).json({
+              success: false,
+              error: 'Thread not found'
+            });
+          }
+
+          const thread = threadResponse.data[0];
+          const projectId = thread.project_id;
+
+          if (!projectId) {
+            return res.status(400).json({
+              success: false,
+              error: 'Project ID not found in thread'
+            });
+          }
+
+          // Get project details to find sandbox ID
+          const projectResponse = await axios.get(`${config.supabase_url}/rest/v1/projects?project_id=eq.${projectId}`, {
+            headers: {
+              'apikey': config.supabase_anon_key,
+              'Authorization': `Bearer ${client.accessToken}`
+            }
+          });
+
+          if (!projectResponse.data || projectResponse.data.length === 0) {
+            return res.status(404).json({
+              success: false,
+              error: 'Project not found'
+            });
+          }
+
+          const project = projectResponse.data[0];
+          const sandboxId = project.sandbox?.sandbox_id || project.sandbox?.id;
+
+          if (!sandboxId) {
+            return res.status(400).json({
+              success: false,
+              error: 'Sandbox ID not found in project'
+            });
+          }
+
+          // Stop agent
+          const stopResult = await axios.post(`${config.backend_url}/api/agent-run/${agentRunId}/stop`, {}, {
+            headers: {
+              'Authorization': `Bearer ${client.accessToken}`
+            }
+          });
+
+          // Delete sandbox
+          const deleteResult = await axios.delete(`${config.backend_url}/api/sandboxes/${sandboxId}`, {
+            headers: {
+              'Authorization': `Bearer ${client.accessToken}`
+            }
+          });
+
+          res.json({
+            success: true,
+            agent_run_id: agentRunId,
+            sandbox_id: sandboxId,
+            message: 'Agent stopped and sandbox deleted successfully'
+          });
+
+        } catch (error) {
+          console.error('Stop and delete failed:', error.message);
+          
+          // Handle specific error cases
+          if (error.response) {
+            const status = error.response.status;
+            const errorMessage = error.response.data?.message || error.message;
+            
+            if (status === 404) {
+              return res.status(404).json({
+                success: false,
+                error: 'Agent run, thread, project, or sandbox not found'
+              });
+            } else if (status === 401) {
+              return res.status(401).json({
+                success: false,
+                error: 'Authentication failed'
+              });
+            }
+          }
+          
+          throw new Error(`Stop and delete failed: ${error.message}`);
+        }
+      });
+    });
+  });
+}));
+
 // ===== FLOWAGENT-* HANDLERS =====
 
 /**
@@ -1003,8 +1156,10 @@ functions.http('eloo-get-messages', ErrorHandler.asyncHandler(async (req, res) =
             'limit': limitNum.toString()
           });
           
-          // Add second type filter (neq.summary)
+          // Add additional type filters (neq.summary, neq.status, neq.tool)
           params.append('type', 'neq.summary');
+          params.append('type', 'neq.status');
+          params.append('type', 'neq.tool');
           
           const fullUrl = `${supabaseUrl}?${params.toString()}`;
           
