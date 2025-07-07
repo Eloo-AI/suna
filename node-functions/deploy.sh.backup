@@ -40,16 +40,17 @@ echo ""
 echo "🔄 Starting parallel deployment - Batch 1 (10 functions)..."
 
 # Batch 1: Legacy + FlowAgent Functions (10 functions)
-deploy_function "suna-health" "health" "$TIMEOUT" "health check function"
-deploy_function "suna-initiate" "initiateSession" "$TIMEOUT" "initiate session function"
-deploy_function "suna-poll" "pollAndDownload" "$TIMEOUT" "poll and download function"
-deploy_function "suna-stop-sandbox" "stopAndDeleteSandbox" "$TIMEOUT" "stop and delete sandbox function"
-deploy_function "suna-stop-agent" "stopAgent" "$TIMEOUT" "stop agent function"
-deploy_function "suna-send-prompt" "sendPrompt" "$TIMEOUT" "send prompt function"
-deploy_function "suna-stream-response" "streamResponse" "$TIMEOUT" "stream response function"
-deploy_function "flowagent-initiate" "flowagent-initiate" "$TIMEOUT" "FlowAgent initiate function"
-deploy_function "flowagent-files" "flowagent-files" "$TIMEOUT" "FlowAgent files function"
-deploy_function "flowagent-chat" "flowagent-chat" "$TIMEOUT" "FlowAgent chat function"
+deploy_function "eloo-agent-initiate" "eloo-agent-initiate" "60s" "ElooAgent initiate function"
+deploy_function "eloo-agent-runs" "eloo-agent-runs" "30s" "ElooAgent get all agent runs status"
+deploy_function "eloo-agent-ensure-active" "eloo-agent-ensure-active" "10s" "ElooAgent chech sandbox is active"
+deploy_function "eloo-agent-run-status" "eloo-agent-run-status" "30s" "ElooAgent get specific agent run status"
+
+
+deploy_function "eloo-agent-files" "eloo-agent-files" "$TIMEOUT" "ElooAgent files function"
+deploy_function "eloo-agent-chat" "eloo-agent-chat" "$TIMEOUT" "ElooAgent chat function"
+deploy_function "eloo-agent-stop" "eloo-agent-stop" "$TIMEOUT" "ElooAgent stop function"
+deploy_function "eloo-agent-delete" "eloo-agent-delete" "$TIMEOUT" "ElooAgent delete function"
+
 
 # Wait for batch 1 to complete
 wait

@@ -22,18 +22,16 @@ class FlowAgentService {
   /**
    * Initialize a new FlowAgent session
    * @param {string} prompt - Initial prompt for the agent
-   * @param {Array} expectedFiles - List of files expected to be created (e.g., ['report.html', 'data.json'])
    * @param {string} modelName - AI model to use
    * @param {Object} user - Authenticated user context
    * @returns {Object} Session data with threadId
    */
-  async initiate(prompt, expectedFiles = [], modelName = 'claude-sonnet-4', user = null, traceId = null) {
+  async initiate(prompt, modelName = 'claude-sonnet-4', user = null, traceId = null) {
     const trace = traceId || logger.generateTraceId();
     
     try {
       console.log('FlowAgent: Initiating session', { 
         promptLength: prompt.length, 
-        expectedFiles, 
         modelName,
         userEmail: user?.email 
       });
@@ -57,7 +55,6 @@ class FlowAgentService {
         projectId: sessionResult.project_id,
         sandboxId: sessionResult.sandbox_id,
         agentRunId: sessionResult.agent_run_id,
-        expectedFiles: expectedFiles || [],
         status: 'initiated',
         createdAt: new Date().toISOString(),
         user: user,
@@ -80,7 +77,6 @@ class FlowAgentService {
         sessionResult.thread_id,
         'unknown', // agentType not available at this level
         1, // phase
-        expectedFiles,
         {
           promptLength: prompt.length,
           modelName,
@@ -93,7 +89,6 @@ class FlowAgentService {
       console.log('FlowAgent: Session initiated successfully', {
         threadId: sessionResult.thread_id,
         sandboxId: sessionResult.sandbox_id,
-        expectedFiles: expectedFiles
       });
 
       return {
@@ -103,7 +98,6 @@ class FlowAgentService {
           projectId: sessionResult.project_id,
           sandboxId: sessionResult.sandbox_id,
           agentRunId: sessionResult.agent_run_id,
-          expectedFiles: expectedFiles,
           status: 'initiated'
         }
       };

@@ -6,11 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Deployment
 ```bash
-# Deploy all functions to Google Cloud
-./deploy.sh
+# Deploy all functions to Google Cloud (NEW - Refactored)
+./scripts/deploy.sh
 
-# Deploy individual function
-gcloud functions deploy suna-health --source . --entry-point health --runtime nodejs20 --trigger-http --allow-unauthenticated --env-vars-file .env.yaml
+# Deploy individual function (NEW - Single function script)
+./scripts/deploy-single.sh health
+
+# Deploy manually
+gcloud functions deploy health --source . --entry-point health --runtime nodejs20 --trigger-http --allow-unauthenticated --env-vars-file .env.yaml
 ```
 
 ### Development
@@ -57,26 +60,55 @@ curl "https://us-central1-suna-deployment-1749244914.cloudfunctions.net/suna-str
 
 This is a Google Cloud Functions project that provides a secure API layer between Firebase-authenticated clients and the Suna Agent backend system.
 
+> **✨ REFACTORED** - The project has been completely reorganized with improved architecture and modular design.
+
 ### Core Components
+
+**New File Structure:**
+- `src/handlers/` - HTTP function handlers organized by category
+- `src/middleware/` - Reusable middleware (auth, CORS, rate limiting, error handling)
+- `src/services/` - Business logic (SunaClient, FlowAgentService)
+- `src/utils/` - Utilities (config, validators, logger)
 
 **Authentication Flow:**
 - Multi-project Firebase token validation (configured in `ALLOWED_FIREBASE_PROJECTS`)
 - Service account approach using single Supabase account for all backend operations
 - Google Cloud Secret Manager for secure password storage
 
-**Main Functions (index.js):**
-- `health` - Unauthenticated health check
-- `initiateSession` - Start new agent sessions with initial prompt
-- `pollAndDownload` - Poll agent status and download completed files
-- `sendPrompt` - Send additional prompts to existing sessions
-- `streamResponse` - Stream real-time responses from agents
-- `stopAndDeleteSandbox` - Stop agents and clean up sandboxes
-- `stopAgent` - Stop agents without deleting sandbox
+**Active Functions (17 total):**
 
-**SunaClient Class:**
-- Handles Supabase authentication with service account
-- Manages all backend API interactions (agent lifecycle, file operations)
-- Implements caching for authentication tokens
+**Agent Functions (eloo-agent-*):**
+- `eloo-agent-initiate` - Start new agent sessions
+- `eloo-agent-send-prompt` - Send prompts to existing sessions
+- `eloo-agent-run-status` - Get status of specific agent runs
+- `eloo-agent-runs` - Get all agent runs for a thread
+- `eloo-agent-ensure-active` - Ensure sandbox is active
+- `eloo-agent-stream` - Real-time streaming responses
+- `eloo-agent-list-files` - List files in sandbox workspace directory
+
+**FlowAgent Functions (flowagent-*):**
+- `flowagent-files` - File management for sessions
+- `flowagent-chat` - Chat interface for sessions
+- `flowagent-new-phase` - Start new workflow phases
+- `flowagent-close` - Close and cleanup sessions
+- `flowagent-status` - Get session status
+- `flowagent-download` - Download specific files
+
+**Utility Functions:**
+- `eloo-download-file` - Download files from sandbox
+- `eloo-get-messages` - Retrieve thread messages
+- `auth-cookie` - Authentication cookie management
+- `health` - Health check endpoint
+
+**Removed Legacy Functions:**
+- ~~`initiateSession`~~ (replaced by `eloo-agent-initiate`)
+- ~~`pollAndDownload`~~ (replaced by agent functions)
+- ~~`stopAndDeleteSandbox`~~ (replaced by agent functions)
+- ~~`stopAgent`~~ (replaced by agent functions)
+
+**Services:**
+- **SunaClient** (`src/services/suna-client.js`) - Handles Supabase authentication and backend API interactions
+- **FlowAgentService** (`src/services/flow-agent-service.js`) - Manages FlowAgent workflows and file monitoring
 
 ### Key Architecture Patterns
 
